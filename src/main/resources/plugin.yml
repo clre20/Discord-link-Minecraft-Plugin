@@ -1,20 +1,33 @@
 name: DiscordLink
-version: '1.6.7'
+version: '${project.version}'
 main: clre20.discordLink.DiscordLink
 api-version: '1.21'
 prefix: DiscordLink
 authors: [ Clre20 ]
-description: A Discord Link plugin
+description: Discord 帳號綁定與驗證
+website: https://github.com/clre20/Discord-link-Minecraft-Plugin
+softdepend: [ HttpHub ]
 
 commands:
   discordlink:
-    description: DiscordLink 系統指令
-    aliases: [dclink]
+    description: DiscordLink 指令
+    usage: /<command> [help|link|version|reload|bypass|admin]
+    aliases: [ dclink ]
 
 permissions:
-  discordlink.admin:
-    description: 允許管理 DiscordLink 系統 (例如 bypass, reload 等指令)
-    default: op
-  discordlink.use:
-    description: 允許玩家自己進行驗證綁定 (例如 link 指令)
+  discordlink.help:
+    description: 查看指令說明
     default: true
+  discordlink.use:
+    description: 用 /dclink link 取得綁定代碼
+    default: true
+  discordlink.version:
+    description: 查看版本並檢查更新，有新版時登入會收到提醒
+    default: op
+  discordlink.admin:
+    description: 管理綁定、免驗證名單與重新載入
+    default: op
+    children:
+      discordlink.help: true
+      discordlink.use: true
+      discordlink.version: true

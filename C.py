@@ -1,7 +1,7 @@
 import requests
 
 # 1. 配置設定
-API_URL = "http://localhost:25580/api/query"
+API_URL = "http://localhost:52010/discordlink/api/query"  # HttpHub 端口
 # 請替換為您 config.yml 中隨機生成的 api.key (64 hex)
 API_KEY = "YOUR_GENERATED_64_HEX_API_KEY"
 

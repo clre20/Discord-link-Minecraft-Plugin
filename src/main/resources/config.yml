@@ -1,87 +1,49 @@
-# ==========================================================
-#                  DiscordLink 設定檔
-# ==========================================================
+# DiscordLink 設定檔
+# 顯示文字都在 messages.yml
+config-version: 2
 
-# 1. 資料庫設定
+# 訊息前綴（MiniMessage 或 & 顏色碼）
+prefix: "<aqua>[DiscordLink]</aqua> "
+
 database:
-  # SQLite
+  # SQLite 檔名（放在插件資料夾，只能用英數字、. _ -）
   sqlite-file-name: "database.db"
 
-# 2. Discord 機器人設定
 discord:
-  # Discord 機器人的 Bot Token
+  # 機器人 Token
   token: "YOUR_DISCORD_BOT_TOKEN"
-
-  # 玩家進行驗證的專屬頻道 ID
+  # 驗證頻道 ID（玩家在這裡輸入代碼）
   verify-channel-id: "YOUR_CHANNEL_ID"
-
-# 3. 驗證與綁定設定
-verification:
-  # 是否強制玩家綁定才能進入伺服器
-  # - true: 啟用強制驗證。
-  # - false: 啟用自由驗證。
-  force-binding: true
-
-  # 每個 Discord 帳號上限能綁定的 Minecraft 帳號數量
-  max-bindings-per-discord: 1
-
-  # 驗證碼的有效時間 (單位：分鐘)
-  code-expiry-minutes: 5
-
-# 4. 遊戲內訊息與提示
-messages:
-  # 當 force-binding 為 false (自由驗證) 且玩家未綁定時，玩家登入伺服器後顯示的提示訊息
-  join-reminder: "<yellow>[DiscordLink]</yellow> <gray>您尚未綁定 Discord 帳號，請在遊戲內輸入 <gold>/dclink link</gold> 取得驗證碼進行綁定！</gray>"
-
-# 5. Discord Embed 訊息卡片排版設定
-embeds:
-  # A. 驗證成功卡片
-  verify-success:
-    title: "✅ 綁定成功！"
-    # 支援變數: {player} 會自動被替換為玩家名稱，{uuid} 會被替換為 UUID 前八碼
-    description: "玩家：**{player}** (ID: `{uuid}...`)"
-    color: "#2ECC71"
-    footer: "極光の幻想鄉 • 驗證系統"
-
-  # B. 驗證失敗卡片
-  verify-fail:
-    title: "❌ 驗證失敗"
-    description: "驗證碼無效或已過期，請重新登入遊戲獲取新代碼。"
-    color: "#E74C3C"
-    footer: "極光の幻想鄉 • 驗證系統"
-
-  # C. 達到綁定上限卡片
-  verify-limit:
-    title: "❌ 綁定失敗"
-    # 支援變數: {max} 會自動被替換為設定的最大綁定數量
-    description: "您的 Discord 帳號已達到綁定上限 ({max} 個帳號)。"
-    color: "#E67E22"
-    footer: "極光の幻想鄉 • 驗證系統"
-
-  # D. 私訊通知卡片
-  private-message:
-    enabled: true
-    title: "🎉 帳號綁定成功 "
-    description: "您的 Discord 帳號已成功與 Minecraft 帳號 **{player}** 完成綁定！\n現在您可以隨時進入伺服器遊玩囉。"
-    color: "#2ECC71"
-    footer: "極光の幻想鄉 • 驗證系統"
-
-  # E. 管理員日誌日誌
+  # 綁定成功後私訊玩家
+  private-message: true
   admin-log:
     enabled: true
-    # 管理員日誌文字頻道 ID
+    # 管理員日誌頻道 ID
     channel-id: "YOUR_ADMIN_LOG_CHANNEL_ID"
-    title: "📥 帳號綁定日誌"
-    description: "Discord 用戶 <@{discord_id}> (`{discord_id}`) 已成功綁定 Minecraft 帳號 **{player}**\nUUID: `{uuid}`"
-    color: "#3498DB"
-    footer: "極光の幻想鄉 • 驗證系統"
 
-# 6. HTTP API 設定 (供第三方 Python 等程式調取資料)
+verification:
+  # true：未綁定不能進服；false：可以進服，用 /dclink link 綁定
+  force-binding: true
+  # 每個 Discord 帳號最多綁定幾個 Minecraft 帳號
+  max-bindings-per-discord: 1
+  # 代碼有效時間（分鐘）
+  code-expiry-minutes: 5
+  # 同一個 Discord 帳號輸錯代碼的次數上限，超過後暫停接受（防止亂猜代碼）
+  max-failed-attempts: 5
+  # 暫停時間（分鐘），從第一次輸錯開始算
+  attempt-window-minutes: 10
+
+# HTTP API（經 HttpHub 提供，網址：http://<IP>:<HttpHub 端口>/discordlink/api/query）
+# 需要安裝 HttpHub：https://github.com/clre20/HttpHub
 api:
-  # 是否啟用 HTTP API 服務
   enabled: true
-  # HTTP API 監聽的連接埠 (Port)
-  port: 25580
-  # 第一次啟動時，若為 "GENERATE" 則會隨機生成一組 16 位金鑰並寫回此處。
-  # 之後您可以手動修改此金鑰。
+  # GENERATE = 第一次啟動時自動產生 64 字元金鑰並寫回這裡
   key: "GENERATE"
+  # 允許用網址參數 ?key= 傳金鑰（會出現在網址與記錄中，建議改用 Authorization 標頭後關掉）
+  allow-query-key: true
+
+update-checker:
+  # 啟動時檢查 GitHub 新版本（結果寫在後台）
+  check-on-startup: true
+  # 有新版時，有 discordlink.version 權限的玩家登入 3 秒後收到提醒
+  notify-on-join: true

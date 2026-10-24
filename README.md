@@ -1,173 +1,167 @@
-# Discord Link
+# DiscordLink
 
-DiscordLink 是一個專為 Paper (Minecraft 1.21.x) 伺服器設計的 Discord 帳號綁定驗證插件。本插件透過本地 SQLite 資料庫紀錄玩家 UUID 與 Discord 帳號的連結關係，並支援強制驗證與自由綁定兩種運作模式，以便伺服器管理員管理玩家社群。
+DiscordLink 是 Paper 伺服器的 Discord 帳號綁定插件。玩家在遊戲取得 5 位數代碼，到 Discord 驗證頻道輸入即可完成綁定；可設定成「未綁定不能進服」。
 
 ## 功能特性
 
-* **雙重驗證機制**：
-  * **強制驗證模式**：未綁定的玩家在登入時會被拒絕連線，並顯示隨機生成的 5 位數驗證碼，玩家需於 Discord 指定頻道輸入驗證碼方可進服。
-  * **自由綁定模式**：玩家可直接進入伺服器，系統會在登入時提示玩家使用 `/discordlink link` 指令獲取驗證碼自行綁定。
-* **自訂 Discord Embeds**：支援在設定檔中自訂所有發送至 Discord 的卡片訊息（標題、描述、Hex 顏色與頁尾文字）。
-* **玩家頭像渲染**：自動整合 `mc-heads.net` API，於 Discord 訊息卡片中顯示綁定玩家的 3D 遊戲頭像，支援正版與離線版 UUID。
-* **Geyser/Floodgate 相容**：針對基岩版（Bedrock）玩家的介面與字數限制進行優化，防範踢出訊息版面錯亂。
-* **設定檔自動升級**：更新插件時，自動補齊新版設定項目，並完整保留原有的自訂值。
-* **管理員日誌與通知**：綁定成功時可選擇是否向玩家發送私訊通知，以及在特定的管理員頻道輸出日誌。
-* **優雅關閉設計**：插件停用時會阻塞主執行緒等待 Discord 連線執行緒完全釋放，避免關機時產生 `zip file closed` 警告。
+* **兩種模式**：
+  * **強制綁定**：未綁定的玩家連線時被擋下，畫面直接顯示代碼。
+  * **自由綁定**：玩家可以進服，用 `/dclink link` 取得代碼。
+* **防止亂猜代碼**：同一個 Discord 帳號輸錯太多次會暫停一段時間（可設定）。
+* **免驗證名單**：指定玩家不需綁定（支援從未進過伺服器的玩家）。
+* **Discord 卡片與斜線指令**：綁定成功／失敗卡片、私訊通知、管理員日誌；管理員可用 `/querydc`、`/querymc` 查詢。
+* **HTTP API（經 HttpHub）**：讓網站或機器人查詢綁定資料，與其他插件共用同一個端口。
+* **所有文字可改**：遊戲訊息、斷線畫面、Discord 卡片都在 `messages.yml`，支援 MiniMessage 與 `&` 顏色碼。
+* **設定自動補齊**：更新後自動補上新項目並保留原本的值；舊版設定會自動搬到新格式。
+* **版本檢查**：啟動時檢查 GitHub 新版本；有新版時管理員登入 3 秒後會收到提醒。
+* **輕量**：綁定資料放在記憶體，資料庫在背景寫入；Discord 連線不會卡住伺服器啟動。
+
+## 支援環境
+
+* Paper 1.21.11、26.x（Purpur 等 Paper 分支理論上相容；不支援 Spigot、Folia）
+* Java 21 以上（26.x 伺服器需要 Java 25）
+* 選用：[HttpHub](https://github.com/clre20/HttpHub)（要用 HTTP API 時才需要）
 
 ## 指令與權限
 
-本插件主指令為 `/discordlink`，別名為 `/dclink`。
+> 主指令 `/discordlink`，別名 `/dclink`
 
-| 指令 | 說明 | 權限節點 | 預設權限 |
-| :--- | :--- | :--- | :--- |
-| `/dclink link` | 獲取 5 位數綁定驗證碼 | `discordlink.use` | 所有人 (`true`) |
-| `/dclink help` | 顯示指令說明清單 | `discordlink.use` | 所有人 (`true`) |
-| `/dclink reload` | 重新載入設定檔 | `discordlink.admin` | 管理員 (`op`) |
-| `/dclink bypass add <玩家>` | 將玩家加入免驗證白名單 | `discordlink.admin` | 管理員 (`op`) |
-| `/dclink bypass remove <玩家>` | 將玩家移出免驗證白名單 | `discordlink.admin` | 管理員 (`op`) |
-| `/dclink admin query <玩家\|DiscordID>` | 查詢特定帳號的綁定關係 | `discordlink.admin` | 管理員 (`op`) |
-| `/dclink admin unbind <玩家\|DiscordID>` | 解除特定帳號的綁定關係 | `discordlink.admin` | 管理員 (`op`) |
-| `/dclink admin list [頁碼]` | 分頁檢視所有已綁定的玩家清單 | `discordlink.admin` | 管理員 (`op`) |
+| 指令 | 說明 | 執行者 | 權限 | 預設 |
+| :--- | :--- | :--- | :--- | :--- |
+| `/dclink help` | 指令說明 | 玩家／後台 | `discordlink.help` | 所有人 |
+| `/dclink link` | 取得綁定代碼 | 玩家 | `discordlink.use` | 所有人 |
+| `/dclink version` | 檢查更新 | 玩家／後台 | `discordlink.version` | OP |
+| `/dclink admin query <玩家\|DiscordID>` | 查詢綁定 | 玩家／後台 | `discordlink.admin` | OP |
+| `/dclink admin unbind <玩家\|DiscordID>` | 解除綁定 | 玩家／後台 | `discordlink.admin` | OP |
+| `/dclink admin list [頁碼]` | 綁定清單 | 玩家／後台 | `discordlink.admin` | OP |
+| `/dclink bypass add <玩家>` | 加入免驗證名單 | 玩家／後台 | `discordlink.admin` | OP |
+| `/dclink bypass remove <玩家>` | 移出免驗證名單 | 玩家／後台 | `discordlink.admin` | OP |
+| `/dclink bypass list` | 免驗證名單 | 玩家／後台 | `discordlink.admin` | OP |
+| `/dclink reload` | 重新載入設定（Token 有變會重新連線） | 玩家／後台 | `discordlink.admin` | OP |
 
-## Discord 機器人斜線指令 (Slash Commands)
+> 有 `discordlink.version` 的玩家，在有新版本時登入 3 秒後會收到提醒。
 
-為確保資料隱私與安全性，以下指令預設僅限擁有 **管理員 (ADMINISTRATOR)** 或 **管理伺服器 (MANAGE_SERVER)** 權限的 Discord 成員在伺服器頻道中使用。
+### Discord 斜線指令
+
+> 只有具備「管理員」或「管理伺服器」權限的成員能用，回覆只有自己看得到。
 
 | 指令 | 說明 | 參數 |
 | :--- | :--- | :--- |
-| `/querydc` | 輸入 Minecraft 玩家名稱，查詢其綁定的 Discord 帳號 | `player` (Minecraft 玩家名稱，必填) |
-| `/querymc` | 輸入 Discord 用戶（可直接提及）或 ID，查詢其綁定的 Minecraft 帳號 | `user` (Discord 用戶、提及或 ID，必填) |
+| `/querydc` | 用 Minecraft 玩家查詢綁定的 Discord | `player`：玩家名稱或 UUID |
+| `/querymc` | 用 Discord 用戶查詢綁定的 Minecraft 帳號 | `user`：Discord ID 或提及 |
 
-## 第三方 HTTP API 介面
+## 使用範例
 
-本插件內置一個輕量級的 HTTP 伺服器，預設監聽連接埠 `25580`。您可以透過此介面讓第三方程式（如 Python）安全地存取與查詢綁定資料。
+### 1. 第一次設定
 
-### API 金鑰驗證
-所有的 GET 請求皆必須在 Header 中附帶 Authorization Bearer 金鑰，或是使用 Query 參數傳送：
-* **Header (推薦)**：`Authorization: Bearer <您的API金鑰>`
-* **Query**：`?key=<您的API金鑰>`
+1. 在 [Discord Developer Portal](https://discord.com/developers/applications) 建立機器人，開啟 **Message Content Intent**，邀請進伺服器。
+2. 編輯 `plugins/DiscordLink/config.yml`：
 
-> [!NOTE]
-> 插件首次啟動時，若 `api.key` 設定為 `"GENERATE"`，系統將會**自動生成一組 64 位（Hex）的隨機安全金鑰**並寫入 `config.yml` 中。
+```yaml
+discord:
+  token: "你的機器人 Token"
+  verify-channel-id: "驗證頻道 ID"
+  admin-log:
+    channel-id: "管理員日誌頻道 ID"
+```
 
-### API 介面規格
+3. 執行 `/dclink reload`（或重啟伺服器）。
 
-* **URL**: `http://<IP>:25580/api/query`
-* **Method**: `GET`
-* **CORS**: 支援 (可直接在前端或跨網域調用)
+### 2. 玩家綁定
 
-#### 1. Minecraft 查 Discord
-* **請求參數**：
-  * `action=query_dc`
-  * `target=<Minecraft玩家名稱 或 UUID>`
-* **回傳 JSON 範例 (已綁定)**：
-  ```json
-  {
-    "status": "success",
-    "bound": true,
-    "data": {
-      "player": "Steve",
-      "uuid": "8667ba71-b85a-4004-af54-4b3a95970922",
-      "discord_id": "123456789012345678"
-    }
-  }
-  ```
+```bash
+# 自由綁定模式：玩家在遊戲內輸入
+/dclink link
+# 強制綁定模式：玩家連線時畫面就會顯示代碼
+# 接著把 5 位數代碼貼到 Discord 驗證頻道
+```
 
-#### 2. Discord 查 Minecraft
-* **請求參數**：
-  * `action=query_mc`
-  * `target=<Discord使用者ID>`
-* **回傳 JSON 範例**：
-  ```json
-  {
-    "status": "success",
-    "bound": true,
-    "data": [
-      {
-        "player": "Steve",
-        "uuid": "8667ba71-b85a-4004-af54-4b3a95970922"
-      }
-    ]
-  }
-  ```
+### 3. 管理
 
-#### 3. 取得所有綁定清單
-* **請求參數**：
-  * `action=all`
-* **回傳 JSON 範例**：
-  ```json
-  {
-    "status": "success",
-    "total": 1,
-    "data": [
-      {
-        "player": "Steve",
-        "uuid": "8667ba71-b85a-4004-af54-4b3a95970922",
-        "discord_id": "123456789012345678"
-      }
-    ]
-  }
-  ```
+```bash
+/dclink admin query Steve
+/dclink admin unbind 123456789012345678
+/dclink bypass add Notch
+```
 
-### Python 範例程式碼
+## HTTP API
 
-您可以使用下方的 Python 腳本來與本插件的 HTTP API 進行互動：
+需要安裝 [HttpHub](https://github.com/clre20/HttpHub)。API 跟其他插件共用 HttpHub 的端口（預設 `52010`），DiscordLink 不再自己開端口。
+
+* **網址**：`http://<伺服器IP>:<HttpHub 端口>/discordlink/api/query`
+* **方法**：`GET`
+* **金鑰**：第一次啟動自動產生並寫入 `config.yml` 的 `api.key`
+  * 標頭（建議）：`Authorization: Bearer <金鑰>`
+  * 網址參數：`?key=<金鑰>`（可用 `api.allow-query-key: false` 關閉）
+
+| action | 參數 | 說明 |
+| :--- | :--- | :--- |
+| `query_dc` | `target`：玩家名稱或 UUID | Minecraft 查 Discord |
+| `query_mc` | `target`：Discord ID | Discord 查 Minecraft |
+| `all` | — | 所有綁定 |
+
+回應範例（`query_dc`）：
+
+```json
+{
+  "status": "success",
+  "bound": true,
+  "data": { "player": "Steve", "uuid": "8667ba71-b85a-4004-af54-4b3a95970922", "discord_id": "123456789012345678" }
+}
+```
+
+Python 範例：
 
 ```python
 import requests
 
-# 1. 配置設定
-API_URL = "http://localhost:25580/api/query"
-# 請替換為您 config.yml 中隨機生成的 api.key (64 hex)
-API_KEY = "YOUR_GENERATED_64_HEX_API_KEY"
+API_URL = "http://localhost:52010/discordlink/api/query"
+API_KEY = "config.yml 裡的 api.key"
+headers = {"Authorization": f"Bearer {API_KEY}"}
 
-headers = {
-    # 支援以 Bearer Token 形式通過身份驗證
-    "Authorization": f"Bearer {API_KEY}"
-}
-
-def query_dc_by_mc(player_name_or_uuid):
-    """
-    透過 Minecraft 玩家名稱或 UUID 查詢綁定的 Discord ID
-    """
-    params = {
-        "action": "query_dc",
-        "target": player_name_or_uuid
-    }
-    response = requests.get(API_URL, headers=headers, params=params)
-    return response.json()
-
-def query_mc_by_dc(discord_id):
-    """
-    透過 Discord ID 查詢綁定的 Minecraft 帳號清單
-    """
-    params = {
-        "action": "query_mc",
-        "target": discord_id
-    }
-    response = requests.get(API_URL, headers=headers, params=params)
-    return response.json()
-
-def query_all_bindings():
-    """
-    獲取目前伺服器中所有的綁定關係
-    """
-    params = {
-        "action": "all"
-    }
-    response = requests.get(API_URL, headers=headers, params=params)
-    return response.json()
-
-if __name__ == "__main__":
-    # 1. 查詢所有綁定關係
-    print("=== 所有綁定關係 ===")
-    print(query_all_bindings())
-    
-    # 2. 用 Minecraft 名稱查詢 Discord
-    print("\n=== 用 Minecraft 名稱查詢 Discord ===")
-    print(query_dc_by_mc("Steve"))
-
-    # 3. 用 Discord ID 查詢 Minecraft
-    print("\n=== 用 Discord ID 查詢 Minecraft ===")
-    print(query_mc_by_dc("123456789012345678"))
+print(requests.get(API_URL, headers=headers, params={"action": "all"}).json())
+print(requests.get(API_URL, headers=headers, params={"action": "query_dc", "target": "Steve"}).json())
+print(requests.get(API_URL, headers=headers, params={"action": "query_mc", "target": "123456789012345678"}).json())
 ```
+
+> 從 1.6.x 升級：舊的 `api.port`（25580）已移除，請改用上面的網址。
+
+## 設定檔
+
+| 檔案 | 內容 |
+| :--- | :--- |
+| `config.yml` | Token、頻道、模式、綁定上限、輸錯限制、API、版本檢查 |
+| `messages.yml` | 所有遊戲訊息、斷線畫面、Discord 卡片與斜線指令文字 |
+| `database.db` | 綁定與免驗證名單（SQLite） |
+
+## 開發者
+
+```bash
+mvn clean package
+# 產出 target/DiscordLink-<版本>.jar
+```
+
+---
+
+# DiscordLink (English)
+
+Discord account linking for Paper servers. Players get a 5-digit code in game and type it in a Discord channel to link. Optionally block unlinked players from joining.
+
+## Features
+
+* **Two modes**: forced linking (code shown on the disconnect screen) or free linking (`/dclink link`).
+* **Guess protection**: a Discord account that enters too many wrong codes is paused for a while.
+* **Bypass list**, **Discord embeds**, **admin slash commands** (`/querydc`, `/querymc`).
+* **HTTP API via HttpHub**: shares one HTTP port with other plugins: `/discordlink/api/query`.
+* **Editable text** in `messages.yml`; config files fill in missing keys automatically.
+* **Update checker** on startup, `/dclink version`, and a join reminder for admins.
+
+## Commands & Permissions
+
+| Command | Description | Permission | Default |
+| :--- | :--- | :--- | :--- |
+| `/dclink link` | Get a link code | `discordlink.use` | everyone |
+| `/dclink version` | Check for updates | `discordlink.version` | op |
+| `/dclink admin <query\|unbind\|list>` | Manage links | `discordlink.admin` | op |
+| `/dclink bypass <add\|remove\|list>` | Bypass list | `discordlink.admin` | op |
+| `/dclink reload` | Reload config | `discordlink.admin` | op |

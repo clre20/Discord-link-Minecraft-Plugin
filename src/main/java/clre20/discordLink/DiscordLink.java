@@ -1,178 +1,206 @@
 package clre20.discordLink;
 
-import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.requests.GatewayIntent;
-import net.kyori.adventure.text.minimessage.MiniMessage;
+import clre20.discordLink.api.ApiBridge;
+import clre20.discordLink.command.DiscordLinkCommand;
+import clre20.discordLink.config.Messages;
+import clre20.discordLink.config.PluginConfig;
+import clre20.discordLink.data.LinkStore;
+import clre20.discordLink.data.PlayerLookup;
+import clre20.discordLink.discord.DiscordBot;
+import clre20.discordLink.discord.DiscordListener;
+import clre20.discordLink.listener.LockedListener;
+import clre20.discordLink.listener.LoginListener;
+import clre20.discordLink.update.UpdateChecker;
+import clre20.discordLink.update.UpdateNotifier;
+import clre20.discordLink.verify.CodeManager;
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.io.File;
+import java.util.UUID;
 
 public final class DiscordLink extends JavaPlugin {
 
-    private JDA jda;
-    private DatabaseManager dbManager;
-    private ApiServer apiServer;
-    private final MiniMessage mm = MiniMessage.miniMessage();
-
-    // 1. 帶顏色控制台 log 輔助方法
-    public void logInfo(String message) {
-        getServer().getConsoleSender().sendMessage(mm.deserialize("<aqua>[DiscordLink]</aqua> <gray>" + message + "</gray>"));
-    }
-
-    public void logSuccess(String message) {
-        getServer().getConsoleSender().sendMessage(mm.deserialize("<aqua>[DiscordLink]</aqua> <green>" + message + "</green>"));
-    }
-
-    public void logWarning(String message) {
-        getServer().getConsoleSender().sendMessage(mm.deserialize("<aqua>[DiscordLink]</aqua> <yellow>[警告] " + message + "</yellow>"));
-    }
-
-    public void logError(String message) {
-        getServer().getConsoleSender().sendMessage(mm.deserialize("<aqua>[DiscordLink]</aqua> <red>[錯誤] " + message + "</red>"));
-    }
-
-    public void printConfigReport() {
-        boolean forceBinding = getConfig().getBoolean("verification.force-binding", true);
-        boolean pmEnabled = getConfig().getBoolean("embeds.private-message.enabled", 
-                getConfig().getBoolean("notifications.private-message.enabled", false));
-        boolean logEnabled = getConfig().getBoolean("embeds.admin-log.enabled", 
-                getConfig().getBoolean("notifications.admin-log.enabled", false));
-        String adminChannelId = getConfig().getString("embeds.admin-log.channel-id", 
-                getConfig().getString("notifications.admin-log.channel-id", "未設定"));
-
-        logInfo("==================================================");
-        logInfo("當前運行模式配置：");
-        logInfo("  ➤ 強制驗證模式: " + (forceBinding ? "<red>強制啟用 (未綁定無法登入)</red>" : "<green>自由模式 (未綁定可登入，使用 /dclink link 綁定)</green>"));
-        logInfo("  ➤ 綁定成功私訊: " + (pmEnabled ? "<green>已啟用</green>" : "<red>已停用</red>"));
-        logInfo("  ➤ 管理員日誌記錄: " + (logEnabled ? "<green>已啟用 (頻道 ID: " + adminChannelId + ")</green>" : "<red>已停用</red>"));
-        logInfo("==================================================");
-    }
+    private PluginConfig config;
+    private Messages messages;
+    private LinkStore store;
+    private PlayerLookup lookup;
+    private CodeManager codes;
+    private DiscordBot discord;
+    private ApiBridge api;
+    private UpdateChecker updates;
+    private UpdateNotifier updateNotifier;
 
     @Override
     public void onEnable() {
-        // 初始化設定檔
-        saveDefaultConfig();
+        config = new PluginConfig(this);
+        messages = new Messages(this);
+        loadFiles();
 
-        // 自動生成 API Key 邏輯
-        if (!getConfig().contains("api.key") || "GENERATE".equalsIgnoreCase(getConfig().getString("api.key"))) {
-            java.security.SecureRandom random = new java.security.SecureRandom();
-            byte[] bytes = new byte[32]; // 32 bytes = 256 bits
-            random.nextBytes(bytes);
-            StringBuilder sb = new StringBuilder();
-            for (byte b : bytes) {
-                sb.append(String.format("%02x", b));
+        store = new LinkStore(new File(getDataFolder(), config.dbFile()),
+                reason -> getLogger().warning(messages.console("db-error", "reason", reason)));
+        try {
+            store.load();
+        } catch (Exception e) {
+            // 資料庫打不開：讀不到綁定資料就無法判斷誰能進服。強制綁定模式下只讓 OP 進服（寧可擋住，不放行）
+            getLogger().severe(messages.console("db-error", "reason", e.getMessage()));
+            getLogger().severe(messages.console("db-locked"));
+            store.close();
+            store = null;
+            if (config.forceBinding()) {
+                getServer().getPluginManager().registerEvents(new LockedListener(this), this);
             }
-            String randomKey = sb.toString(); // 64 字元的 Hex 字串
-
-            getConfig().set("api.enabled", getConfig().getBoolean("api.enabled", true));
-            getConfig().set("api.port", getConfig().getInt("api.port", 25580));
-            getConfig().set("api.key", randomKey);
-            saveConfig();
-            String maskedKey = randomKey.substring(0, 4) + "********************************************************" + randomKey.substring(60);
-            logInfo("已自動為 HTTP API 生成隨機安全金鑰 (64 hex): " + maskedKey + " 並儲存至 config.yml 中！");
-        }
-
-        // 檢查是否需要補齊新版設定項目 (保留玩家現有設定值)
-        if (!getConfig().contains("embeds.verify-success.title")) {
-            getConfig().options().copyDefaults(true);
-            saveConfig();
-            logInfo("偵測到設定檔版本較舊，已自動補齊缺失的卡片設定欄位 (Embeds)，並完整保留您原先設定的 Token 與頻道 ID！");
-        }
-
-        String token = getConfig().getString("discord.token", getConfig().getString("discord-token"));
-        String channelId = getConfig().getString("discord.verify-channel-id", getConfig().getString("verify-channel-id"));
-        String dbName = getConfig().getString("database.sqlite-file-name", getConfig().getString("sqlite-file-name", "database.db"));
-        int expiryMinutes = getConfig().getInt("verification.code-expiry-minutes", 5);
-
-        // 預先檢查 Token 是否為空或預設預留字串，若是則直接停用插件，避免拋出非同步執行緒錯誤
-        if (token == null || token.isEmpty() || token.equalsIgnoreCase("YOUR_DISCORD_BOT_TOKEN")) {
-            logError("==================================================");
-            logError("  無法啟動 Discord 機器人！");
-            logError("  請在 config.yml 中將 'discord.token' 設定為正確的 Bot Token！");
-            logError("==================================================");
-            getServer().getPluginManager().disablePlugin(this);
             return;
         }
+        fillMissingNames();
+        getLogger().info(messages.console("db-loaded", "bindings", store.bindingCount(), "bypass", store.bypassCount()));
 
-        // 初始化管理器
-        ValidationManager validationManager = new ValidationManager(expiryMinutes);
-        dbManager = new DatabaseManager(getDataFolder(), dbName);
+        lookup = new PlayerLookup(this, store);
+        codes = new CodeManager(config.codeExpiryMinutes(), config.attemptWindowMinutes());
+        updates = new UpdateChecker(getPluginMeta().getVersion());
+        updateNotifier = new UpdateNotifier(this);
+        api = new ApiBridge(this);
+        discord = new DiscordBot(this, new DiscordListener(this));
 
-        // 註冊 Minecraft 監聽器
-        getServer().getPluginManager().registerEvents(new LoginListener(dbManager, validationManager), this);
+        getServer().getPluginManager().registerEvents(new LoginListener(this), this);
+        getServer().getPluginManager().registerEvents(updateNotifier, this);
+        getServer().getPluginManager().registerEvents(api, this);
 
-        DiscordLinkCommand commandExecutor = new DiscordLinkCommand(dbManager, validationManager);
-        getCommand("discordlink").setExecutor(commandExecutor);
-        getCommand("discordlink").setTabCompleter(commandExecutor);
-
-        // 啟動 API 伺服器
-        if (getConfig().getBoolean("api.enabled", true)) {
-            int apiPort = getConfig().getInt("api.port", 25580);
-            String apiKey = getConfig().getString("api.key");
-            apiServer = new ApiServer(this, dbManager, apiPort, apiKey);
-            apiServer.start();
+        PluginCommand command = getCommand("discordlink");
+        if (command != null) {
+            DiscordLinkCommand executor = new DiscordLinkCommand(this);
+            command.setExecutor(executor);
+            command.setTabCompleter(executor);
         }
 
-        // 初始化 JDA
-        try {
-            jda = JDABuilder.createDefault(token)
-                    .enableIntents(GatewayIntent.MESSAGE_CONTENT)
-                    .addEventListeners(new DiscordListener(this, validationManager, dbManager, getServer()))
-                    .build();
-            jda.awaitReady();
-            logSuccess("Discord 機器人已成功啟動並連線！");
-
-            // 註冊 Slash 指令
-            jda.updateCommands().addCommands(
-                    net.dv8tion.jda.api.interactions.commands.build.Commands.slash("querydc", "輸入 Minecraft 玩家名稱查詢綁定的 Discord 帳號")
-                            .addOption(net.dv8tion.jda.api.interactions.commands.OptionType.STRING, "player", "Minecraft 玩家名稱", true),
-                    net.dv8tion.jda.api.interactions.commands.build.Commands.slash("querymc", "輸入 Discord 用戶或 ID 查詢綁定的 Minecraft 帳號")
-                            .addOption(net.dv8tion.jda.api.interactions.commands.OptionType.STRING, "user", "Discord 用戶 ID、提及(Mention)或名稱", true)
-            ).queue(
-                    success -> logInfo("已成功向 Discord 註冊斜線指令 (querydc / querymc)"),
-                    error -> logError("註冊斜線指令失敗: " + error.getMessage())
-            );
-
-            printConfigReport();
-        } catch (Exception e) {
-            logError("無法啟動 Discord 機器人，請檢查 Token 是否正確。");
-            logError("詳細錯誤簡述: " + e.getMessage());
-            
-            // 立即強制關閉非同步執行緒，防範 classloader 關閉後背景連線丟出 zip file closed 警告
-            if (jda != null) {
-                try {
-                    jda.shutdownNow();
-                    jda.awaitShutdown(java.time.Duration.ofSeconds(5));
-                } catch (Exception ignored) {}
-                jda = null;
-            }
-            getServer().getPluginManager().disablePlugin(this);
-        }
+        printMode();
+        api.refresh(true);
+        startDiscord();
+        updateNotifier.checkOnStartup();
     }
 
     @Override
     public void onDisable() {
-        if (apiServer != null) {
-            apiServer.stop();
+        if (api != null) {
+            api.stop();
         }
-        if (jda != null) {
-            try {
-                // 優先使用優雅關閉
-                jda.shutdown();
-                // 阻塞等待最多 5 秒讓 JDA 內部連線與背景執行緒完全退場，防止 classloader 關閉後丟出 zip file closed 錯誤
-                if (!jda.awaitShutdown(java.time.Duration.ofSeconds(5))) {
-                    jda.shutdownNow();
-                    jda.awaitShutdown(java.time.Duration.ofSeconds(2));
-                }
-            } catch (InterruptedException e) {
-                try {
-                    jda.shutdownNow();
-                } catch (Exception ignored) {}
-                Thread.currentThread().interrupt();
-            } catch (Exception ignored) {
-            } finally {
-                jda = null;
+        if (discord != null) {
+            discord.shutdown();
+        }
+        if (lookup != null) {
+            lookup.shutdown();
+        }
+        if (updates != null) {
+            updates.shutdown();
+        }
+        if (codes != null) {
+            codes.clear();
+        }
+        if (store != null) {
+            store.close();
+        }
+    }
+
+    /** 讀取（並補齊）config.yml 與 messages.yml。 */
+    private void loadFiles() {
+        config.load();
+        messages.load(config.legacyMessages());
+        if (config.migrated()) {
+            getLogger().info(messages.console("config-migrated"));
+        }
+        if (config.hadOldApiPort()) {
+            getLogger().info(messages.console("old-api-port"));
+        }
+        if (config.lastFilled() > 0) {
+            getLogger().info(messages.console("config-filled", "count", config.lastFilled()));
+        }
+        if (messages.lastFilled() > 0) {
+            getLogger().info(messages.console("messages-filled", "count", messages.lastFilled()));
+        }
+        if (config.badDbName()) {
+            getLogger().warning(messages.console("bad-db-name"));
+        }
+        String key = config.generatedKey();
+        if (key != null) {
+            getLogger().info(messages.console("api-key-generated", "masked", key.substring(0, 4) + "…" + key.substring(key.length() - 4)));
+        } else if (config.apiKey().length() < 16) {
+            getLogger().warning(messages.console("api-key-short"));
+        }
+    }
+
+    /** 舊資料沒有名稱欄位：從伺服器的玩家快取補上（只讀本機快取，不連網）。 */
+    private void fillMissingNames() {
+        for (UUID uuid : store.unnamed()) {
+            OfflinePlayer op = Bukkit.getOfflinePlayer(uuid);
+            if (op.getName() != null) {
+                store.updateName(uuid, op.getName());
             }
         }
-        // Sqlite Connection pool 如果未來有使用 HikariCP，須在此關閉
+    }
+
+    private void startDiscord() {
+        if (!config.hasToken()) {
+            getLogger().warning(messages.console("token-missing"));
+            return;
+        }
+        discord.connect(config.token());
+    }
+
+    private void printMode() {
+        getLogger().info(messages.console(config.forceBinding() ? "mode-force" : "mode-free"));
+    }
+
+    /** /dclink reload。 */
+    public void reload(CommandSender sender) {
+        String oldToken = discord.token();
+        loadFiles();
+        codes.configure(config.codeExpiryMinutes(), config.attemptWindowMinutes());
+        api.refresh(true);
+        printMode();
+        messages.send(sender, "reload.done");
+        if (!config.hasToken()) {
+            if (!oldToken.isEmpty()) {
+                discord.disconnectAsync();
+            }
+            getLogger().warning(messages.console("token-missing"));
+        } else if (!config.token().equals(oldToken) || (!discord.online() && !discord.connecting())) {
+            messages.send(sender, "reload.discord-restart");
+            discord.connect(config.token());
+        }
+    }
+
+    public PluginConfig config() {
+        return config;
+    }
+
+    public Messages messages() {
+        return messages;
+    }
+
+    public LinkStore store() {
+        return store;
+    }
+
+    public PlayerLookup lookup() {
+        return lookup;
+    }
+
+    public CodeManager codes() {
+        return codes;
+    }
+
+    public DiscordBot discord() {
+        return discord;
+    }
+
+    public UpdateChecker updates() {
+        return updates;
+    }
+
+    public UpdateNotifier updateNotifier() {
+        return updateNotifier;
     }
 }

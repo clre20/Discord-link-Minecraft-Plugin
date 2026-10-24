@@ -1,0 +1,169 @@
+# DiscordLink 訊息
+# 遊戲內文字支援 MiniMessage（<green>、<gradient:blue:aqua>…）與 & 顏色碼
+# 變數格式 {name}；\n 換行
+messages-version: 1
+
+no-permission: "<red>沒有權限。"
+player-only: "<red>只有玩家能用這個指令。"
+unknown-player: "未知玩家"
+
+help:
+  header: "<aqua>DiscordLink <gray>v{version}"
+  link: "<yellow>/{label} link <gray>取得綁定代碼"
+  version: "<yellow>/{label} version <gray>檢查更新"
+  query: "<yellow>/{label} admin query <玩家|DiscordID> <gray>查詢綁定"
+  unbind: "<yellow>/{label} admin unbind <玩家|DiscordID> <gray>解除綁定"
+  list: "<yellow>/{label} admin list [頁碼] <gray>綁定清單"
+  bypass: "<yellow>/{label} bypass <add|remove|list> [玩家] <gray>免驗證名單"
+  reload: "<yellow>/{label} reload <gray>重新載入"
+
+usage:
+  bypass: "<red>用法：/{label} bypass <add|remove|list> [玩家]"
+  admin: "<red>用法：/{label} admin <query|unbind|list> [玩家|DiscordID|頁碼]"
+  target: "<red>請指定玩家名稱或 Discord ID。"
+
+link:
+  bypassed: "<green>你在免驗證名單中，不用綁定。"
+  already: "<yellow>你已經綁定 Discord 了。"
+  code: "<green>綁定代碼：<yellow><bold>{code}</bold></yellow>\n<gray>到 Discord 驗證頻道輸入，{minutes} 分鐘內有效。"
+  discord-offline: "<red>Discord 機器人目前未連線，代碼暫時無法使用。"
+  success: "<green>已綁定 Discord 帳號 <yellow>{discord_name}</yellow>。"
+
+join-reminder: "<yellow>你尚未綁定 Discord，輸入 <gold>/dclink link</gold> 取得代碼。"
+
+# 強制綁定模式下，未綁定玩家連線時看到的畫面
+kick: "<gradient:blue:aqua><bold>極光の幻想鄉</bold></gradient>\n<red>綁定 Discord 後才能進入伺服器\n<gray>到 Discord 驗證頻道輸入代碼：\n<yellow><bold>{code}</bold></yellow>\n<dark_gray>{minutes} 分鐘內有效，重新連線可換新代碼"
+
+# 資料庫無法讀取時（強制綁定模式）非 OP 看到的畫面
+locked-kick: "<red>伺服器驗證系統暫時無法使用，請稍後再試。"
+
+lookup:
+  searching: "<gray>正在查詢 {name}…"
+  not-found: "<red>找不到玩家 {name}。"
+  invalid-name: "<red>玩家名稱格式不正確。"
+
+bypass:
+  added: "<green>已將 {player} 加入免驗證名單。"
+  removed: "<green>已將 {player} 移出免驗證名單。"
+  already: "<yellow>{player} 已在免驗證名單中。"
+  not-in: "<yellow>{player} 不在免驗證名單中。"
+  list-header: "<aqua>免驗證名單（{count}）："
+  list-entry: "<gray>- <white>{player}"
+  list-empty: "<gray>免驗證名單是空的。"
+
+admin:
+  player-bound: "<green>{player} <gray>→ Discord <yellow>{discord_id}"
+  player-unbound: "<yellow>{player} 尚未綁定。"
+  discord-header: "<green>Discord {discord_id} 綁定的帳號："
+  discord-entry: "<gray>- <white>{player} <dark_gray>({uuid})"
+  discord-unbound: "<yellow>Discord {discord_id} 沒有綁定帳號。"
+  unbind-player: "<green>已解除 {player} 的綁定。"
+  unbind-discord: "<green>已解除 Discord {discord_id} 的 {count} 個綁定。"
+  list-header: "<aqua>綁定清單 {page}/{pages}（共 {total}）"
+  list-entry: "<yellow>{player} <gray>⇄ <green>{discord_id}"
+  list-empty: "<gray>目前沒有綁定資料。"
+  page-invalid: "<red>頁碼要在 1～{pages} 之間。"
+
+reload:
+  done: "<green>已重新載入。"
+  discord-restart: "<yellow>Discord 設定已變更，正在重新連線…"
+
+version:
+  current: "<gray>目前版本：<white>{version}"
+  checking: "<gray>正在檢查更新…"
+  newer: "<green>有新版本 <yellow>{latest}</yellow>（目前 {current}）\n<gray>{url}"
+  latest: "<green>已是最新版本。"
+  dev: "<yellow>目前版本比 GitHub 新（開發版）。"
+  failed: "<red>檢查更新失敗：{reason}"
+  join-notify: "<green>有新版本 <yellow>{latest}</yellow>（目前 {current}）\n<gray>{url}"
+  reason-offline: "無法連線到 GitHub"
+  reason-http: "GitHub 回應 {code}"
+  reason-no-release: "GitHub 尚無發布版本"
+  reason-no-tag: "發布版本沒有標籤"
+
+console:
+  config-filled: "config.yml 已補上 {count} 個項目。"
+  messages-filled: "messages.yml 已補上 {count} 個項目。"
+  config-migrated: "已把舊版設定搬到新格式（Discord 卡片文字移到 messages.yml）。"
+  old-api-port: "內建的 HTTP 端口（舊設定 api.port）已移除，API 改由 HttpHub 提供。"
+  bad-db-name: "sqlite-file-name 格式不正確，改用 database.db。"
+  api-key-generated: "已產生 API 金鑰：{masked}（完整金鑰在 config.yml）"
+  api-key-short: "API 金鑰少於 16 個字元，建議改成更長的金鑰。"
+  db-loaded: "已載入 {bindings} 筆綁定、{bypass} 筆免驗證。"
+  db-error: "資料庫錯誤：{reason}"
+  db-locked: "無法讀取綁定資料，插件功能停用；強制綁定模式下只有 OP 能進服，請修正後重啟。"
+  mode-force: "模式：強制綁定（未綁定不能進服）"
+  mode-free: "模式：自由綁定（可進服，用 /dclink link 綁定）"
+  token-missing: "尚未設定 discord.token，Discord 功能停用（強制綁定模式下未綁定玩家仍無法進服）。"
+  discord-connecting: "正在連線 Discord…"
+  discord-ready: "Discord 機器人已連線：{name}"
+  discord-failed: "Discord 連線失敗：{reason}"
+  slash-registered: "已註冊斜線指令 /querydc、/querymc。"
+  slash-failed: "註冊斜線指令失敗：{reason}"
+  dm-failed: "無法私訊 {user}（對方可能關閉私訊）。"
+  log-channel-missing: "找不到管理員日誌頻道 {id}。"
+  verify-channel-missing: "找不到驗證頻道 {id}，請確認 discord.verify-channel-id。"
+  api-registered: "HTTP API 已透過 HttpHub 提供：/discordlink/api/query（端口 {port}）"
+  api-no-httphub: "未安裝 HttpHub，HTTP API 停用。"
+  api-removed: "HttpHub 已停用，HTTP API 暫停。"
+  update-newer: "有新版本 {latest}（目前 {current}）：{url}"
+  update-latest: "已是最新版本。"
+  update-dev: "目前版本比 GitHub 新（開發版）。"
+  update-failed: "檢查更新失敗：{reason}"
+
+# HTTP API 回應的 message 欄位
+http:
+  unauthorized: "API 金鑰錯誤"
+  disabled: "API 金鑰未設定"
+  method: "只支援 GET"
+  missing-action: "缺少 action（query_dc、query_mc、all）"
+  unknown-action: "未知的 action（query_dc、query_mc、all）"
+  missing-target: "缺少 target"
+  invalid-discord-id: "Discord ID 格式不正確"
+  player-unbound: "該玩家尚未綁定 Discord"
+  discord-unbound: "該 Discord ID 沒有綁定 Minecraft 帳號"
+
+# Discord 端文字（Discord Markdown，不支援遊戲顏色碼）
+discord:
+  footer: "極光の幻想鄉 • 驗證系統"
+  verify-success:
+    title: "✅ 綁定成功！"
+    # {player} 玩家名稱、{uuid} UUID 前 8 碼
+    description: "玩家：**{player}**（ID：`{uuid}…`）"
+    color: "#2ECC71"
+  verify-fail:
+    title: "❌ 驗證失敗"
+    description: "代碼無效或已過期，請重新取得代碼。"
+    color: "#E74C3C"
+  verify-limit:
+    title: "❌ 綁定失敗"
+    # {max} 上限
+    description: "你的 Discord 帳號已達綁定上限（{max} 個）。"
+    color: "#E67E22"
+  too-many-attempts:
+    title: "⏳ 嘗試次數過多"
+    # {minutes} 暫停分鐘數
+    description: "{user} 輸錯太多次，{minutes} 分鐘內不再接受代碼。"
+    color: "#E67E22"
+  private-message:
+    title: "🎉 帳號綁定成功"
+    description: "你的 Discord 已與 Minecraft 帳號 **{player}** 綁定。"
+    color: "#2ECC71"
+  admin-log:
+    title: "📥 帳號綁定日誌"
+    # {discord_id}、{player}、{uuid}
+    description: "<@{discord_id}>（`{discord_id}`）綁定了 **{player}**\nUUID：`{uuid}`"
+    color: "#3498DB"
+  slash:
+    querydc-description: "用 Minecraft 玩家名稱查詢綁定的 Discord"
+    querydc-option: "Minecraft 玩家名稱或 UUID"
+    querymc-description: "用 Discord 用戶查詢綁定的 Minecraft 帳號"
+    querymc-option: "Discord 用戶 ID 或提及"
+    guild-only: "這個指令只能在伺服器中使用。"
+    no-permission: "❌ 需要「管理員」或「管理伺服器」權限。"
+    invalid-id: "❌ Discord ID 或提及格式不正確。"
+    player-bound: "🔍 **{player}** 綁定的 Discord：<@{discord_id}>（`{discord_id}`）"
+    player-unbound: "❌ **{player}** 尚未綁定 Discord。"
+    discord-header: "🔍 <@{discord_id}>（`{discord_id}`）綁定的 Minecraft 帳號："
+    discord-entry: "- **{player}**（`{uuid}`）"
+    discord-unbound: "❌ <@{discord_id}>（`{discord_id}`）沒有綁定 Minecraft 帳號。"
